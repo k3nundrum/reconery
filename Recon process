@@ -1,0 +1,26 @@
+## To clean up Amass output for subdomain host names
+
+cat subs.txt| cut -d ']' -f 2 | awk '{print $1}' | sort -u > hosts.txt
+
+## To get the IPv4 addresses out of Amass output
+
+cat subs.txt| cut -d ']' -f 2 | awk '{print $2}' | sort -u | grep -oE "\b([0-9]{1,3}\.){3}[0-9]{1,3}\b" >> ips.txt
+
+## Search crt.sh for additional subdomains and parse with jq etc....
+curl -s "https://crt.sh/?q=%.domain.com&output=json" | jq '.[].name_value' | sed 's/\"//g' | sed 's/\*\.//g' | sort -u > hosts-crtsh.txt
+
+
+## Create domain specific DNS wordlist
+sed 's/$/.domain.com/' /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt > hosts-dnswordlist.txt
+
+## Cat everything, sort and come up with a masterlist to feed to massdns
+cat hosts.txt hosts-crtsh.txt hosts-dnswordlist.txt | sort -u | > master-hostslist.txt
+
+## Feed it all to massdns to see whats alive
+massdns -r resolvers.txt -t A -o S -w massdns.out master-hostslist.txt
+
+## bash magic
+cat massdns.out | awk '{print $1}' | sed 's/.$//'| sort -u > live-hosts.txt
+
+## Feed this to httprobe for a nice list
+cat live-hosts.txt| /root/go/bin/httprobe > httprobed-livehosts.txt
